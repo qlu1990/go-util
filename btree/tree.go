@@ -52,6 +52,10 @@ func NewTree() *Node {
 //Insert data
 func (t *Node) insert(n *Node) {
 	if t.nodeType == LEAF {
+		if len(t.childs) == 0 {
+			t.childs = append(t.childs, n)
+			return
+		}
 		poi := 0
 		for i, cn := range t.childs {
 			if strings.Compare(n.key, cn.key) <= 0 {
@@ -69,6 +73,13 @@ func (t *Node) insert(n *Node) {
 			t.nodeSplit()
 		}
 	} else {
+		if len(t.childs) == 0 {
+			newNode := newNode(n.key, n.value)
+			newNode.nodeType = LEAF
+			t.childs = append(t.childs, newNode)
+			newNode.insert(n)
+			return
+		}
 		index := 0
 		for i, cn := range t.childs {
 			if strings.Compare(n.key, cn.key) <= 0 {
@@ -87,8 +98,8 @@ func (t *Node) insert(n *Node) {
 				leafNode.nodeType = LEAF
 				n.father = leafNode
 				leafNode.childs = append(leafNode.childs, n)
-				n.next = t.childs[childsLen].next
-				t.childs[childsLen].next = n.next
+				n.next = t.childs[childsLen-1].next
+				t.childs[childsLen-1].next = n.next
 				leafNode.father = t
 				t.childs = append(t.childs, leafNode)
 				if len(t.childs) == Threshold {
