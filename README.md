@@ -24,7 +24,7 @@ A： 按照io page 的整数倍分block，block 内设置id
    持久化数据结构
 
     block1  4K   root(id = 0) 
-    block2  4k   1 -> a(id = 0),5-> d(id=2)
+    block2  4k   1 -> a(id = 0),5-> d(id=1)
     block3  4k   2 -> b(id = 0)
 
 
