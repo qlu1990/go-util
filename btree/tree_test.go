@@ -2,30 +2,29 @@ package btree
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 )
 
 var (
-	btree = NewTree()
+	b = NewTree(1, "abc")
 )
 
 func TestInsert(t *testing.T) {
-	node1 := NewNode("abc", "abc")
-	btree.Insert(node1)
-	node2 := NewNode("def", "def")
-	btree.Insert(node2)
-	node3 := NewNode("dff", "d2f")
-	btree.Insert(node3)
+	for i := 0; i < 1000; i++ {
+		value := strconv.Itoa(i)
+		b.InsertNodeValue(uint32(i), value)
+	}
 }
 
 func TestSearchData(t *testing.T) {
-	n := btree.SearchData("abc")
+	n := b.SearchKey(100)
 	next := n
 	for {
 		if next == nil {
 			break
 		}
-		fmt.Println(next.key, next.value)
-		next = next.next
+		fmt.Println(next.Key, next.Value)
+		next = next.Next
 	}
 }

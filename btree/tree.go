@@ -1,218 +1,256 @@
 package btree
 
-import (
-	"errors"
-	"strings"
-)
-
-//node type
-const (
-	ROOT uint8 = iota
-	FATHER
-	LEAF
-	DATA
-)
+import "errors"
 
 var (
 	//Threshold threshold for one node childs count
 	Threshold = 256
 )
 
-//Node tree  node
+//node type
+const (
+	FATHER uint = iota
+	LEFT
+)
+
+//error type
+var (
+	ErrorDuplicateKkey error = errors.New("duplicate key value")
+)
+
+//Node root node
 type Node struct {
-	key      string
-	value    string
-	nodeType uint8
-	father   *Node
-	childs   []*Node
-	next     *Node
+	Key        uint32
+	Value      string
+	ChildCount int
+	NodeType   uint
+	LeftNode   *Node
+	Pre        *Node
+	Next       *Node
+	Father     *Node
 }
 
-//NewNode create a node
-func NewNode(key string, value string) *Node {
+//NewTree get node tree
+func NewTree(key uint32, value string) *Node {
+	rootNode := NewFatherNode(key)
+	leafNode := NewLeafNode(key, value)
+	leafNode.Father = rootNode
+	rootNode.LeftNode = leafNode
+	rootNode.ChildCount = 1
+	return rootNode
+}
+
+//NewLeafNode get node leafNode
+func NewLeafNode(key uint32, value string) *Node {
 	return &Node{
-		nodeType: DATA,
-		key:      key,
-		value:    value,
-		childs:   make([]*Node, 0),
+		NodeType: LEFT,
+		Key:      key,
+		Value:    value,
 	}
-
 }
 
-//NewTree get new tree
-func NewTree() *Node {
+//NewFatherNode get fahter node
+func NewFatherNode(key uint32) *Node {
 	return &Node{
-		nodeType: ROOT,
-		childs:   make([]*Node, 0),
+		NodeType: FATHER,
+		Key:      key,
 	}
 }
 
-//Insert data
-func (t *Node) Insert(n *Node) (err error) {
-	if t.nodeType == LEAF {
-		childsLen := len(t.childs)
-		n.father = t
-		if childsLen == 0 {
-			t.childs = append(t.childs, n)
-			return
-		}
-		poi := 0
-		for i, cn := range t.childs {
-			poi = i
-			if strings.Compare(n.key, cn.key) < 0 {
+//GetFather get node father
+func (n *Node) GetFather() *Node {
+	return n.Father
+}
+
+//GetType get node type
+func (n *Node) GetType() uint {
+	return n.NodeType
+}
+
+//GetChildCount get child node count
+func (n *Node) GetChildCount() int {
+	return n.ChildCount
+}
+
+//IsRoot  node is root node
+func (n *Node) IsRoot() bool {
+	if n.Father == nil {
+		return true
+	}
+	return false
+}
+
+//ChildIsLeafNode child is LeftNode
+func (n *Node) ChildIsLeafNode() bool {
+	if n.ChildCount != 0 && n.LeftNode.NodeType == LEFT {
+		return true
+	}
+	return false
+}
+
+//GetNext get next node
+func (n *Node) GetNext() *Node {
+	return n.Next
+}
+
+//GetPre get pre node
+func (n *Node) GetPre() *Node {
+	return n.Pre
+}
+
+//GetCenterChildNode get center chlid node
+func (n *Node) getCenterChildNode() *Node {
+	centerNode := n.LeftNode
+	centerCount := n.ChildCount/2 + 1
+	for i := 0; i < centerCount; i++ {
+		centerNode = centerNode.Next
+	}
+	return centerNode
+}
+
+//InsertNodeValue insert data to tree
+func (n *Node) InsertNodeValue(key uint32, value string) error {
+	node := NewLeafNode(key, value)
+	return n.InsertNode(node)
+}
+
+//InsertNode Insert child node
+func (n *Node) InsertNode(childNode *Node) (err error) {
+	if childNode.Key > n.Key {
+		nextNode := n.LeftNode
+		i := 0
+		for ; ; i++ {
+			if childNode.Key < nextNode.Key {
+				if n.ChildIsLeafNode() {
+					preNode := nextNode.Pre
+					preNode.Next = childNode
+					childNode.Pre = preNode
+					childNode.Next = nextNode
+					nextNode.Pre = childNode
+					n.ChildCount++
+					n.splitChilds()
+				} else {
+					nextNode.Pre.InsertNode(childNode)
+				}
 				break
+			} else if childNode.Key == nextNode.Key {
+				return ErrorDuplicateKkey
+			} else {
+				if i == n.ChildCount-1 {
+					if nextNode.NodeType == LEFT {
+						childNode.Pre = nextNode
+						nextNode.Next = childNode
+						if nextNode.Next != nil {
+							nextNode.Next.Pre = childNode
+						}
+						n.ChildCount++
+						n.splitChilds()
+					} else {
+						nextNode.InsertNode(childNode)
+					}
+					break
+				}
 			}
-
-		}
-
-		if strings.Compare(n.key, t.childs[poi].key) < 0 { /*   */
-			t.childs = append(t.childs, n)
-			copy(t.childs[poi+1:], t.childs[poi:])
-			t.childs[poi+1] = n
-			n.next = t.childs[poi].next
-			t.childs[poi].next = n
-			n.key, n.value, t.childs[poi].key, t.childs[poi].value =
-				t.childs[poi].key, t.childs[poi].value, n.key, n.value
-		} else if strings.Compare(n.key, t.childs[poi].key) == 0 {
-			return errors.New("insert repeat key")
-		} else {
-			t.childs = append(t.childs, n)
-			n.next = t.childs[childsLen-1].next
-			t.childs[childsLen-1].next = n
-		}
-
-		if len(t.childs) == Threshold {
-			t.nodeSplit()
+			nextNode = nextNode.Next
 		}
 		return
-	}
-
-	childsLen := len(t.childs)
-	if childsLen == 0 {
-		NewNode := NewNode(n.key, n.value)
-		NewNode.nodeType = LEAF
-		t.childs = append(t.childs, NewNode)
-		n.father = NewNode
-		NewNode.Insert(n)
-		return
-	}
-	index := 0
-
-	for i, cn := range t.childs {
-		index = i
-		if index == childsLen-1 || (strings.Compare(n.key, cn.key) >= 0 &&
-			strings.Compare(n.key, t.childs[i+1].key) < 0) {
-			break
-		}
-	}
-
-	if index > 0 {
-		t.childs[index].Insert(n)
+	} else if childNode.Key == n.Key {
+		return ErrorDuplicateKkey
 	} else {
-		if strings.Compare(n.key, t.childs[0].key) < 0 {
-			leafNode := NewNode(n.key, n.value)
-			leafNode.nodeType = LEAF
-			n.father = leafNode
-			leafNode.childs = append(leafNode.childs, n)
-			n.next = t.childs[index].childs[0]
-			leafNode.father = t
-			t.childs = append(t.childs, leafNode)
-			copy(t.childs[1:], t.childs)
-			t.childs[0] = leafNode
-			if len(t.childs) == Threshold {
-				t.nodeSplit()
+		return n.addInLeft(childNode)
+	}
+
+}
+func (n *Node) addInLeft(childNode *Node) (err error) {
+	if n.NodeType == LEFT {
+		n.Father.LeftNode = childNode
+		childNode.Father = n.Father
+		childNode.Next = n
+		n.Pre = childNode
+		n.Father.ChildCount++
+		n.Father.splitChilds()
+		return
+	}
+	n.Key = childNode.Key
+	return n.LeftNode.addInLeft(childNode)
+
+}
+func (n *Node) splitChilds() {
+	if n.ChildCount == Threshold {
+		center := Threshold/2 + 1
+		centerNode := n.LeftNode
+		for i := 1; i < center; i++ {
+			centerNode = centerNode.Next
+		}
+		newFatherNode := initFatherNode(centerNode)
+		rightNode := centerNode
+		changeFather(rightNode, newFatherNode, Threshold-center+1)
+		newFatherNode.ChildCount = Threshold - center + 1
+		if n.Father != nil { //中间层拆分
+			n.ChildCount = center - 1
+			newFatherNode.Next = n.Next
+			newFatherNode.Pre = n
+			if n.Next != nil {
+				n.Next.Pre = newFatherNode
 			}
+			n.Next = newFatherNode
+			newFatherNode.Father = n.Father
+			n.Father.ChildCount++
+			n.Father.splitChilds()
 		} else {
-			t.childs[0].Insert(n)
-		}
-
-	}
-	return
-
-}
-
-//nodeSplit split nodechilds if is length equel Threshold
-func (t *Node) nodeSplit() {
-	switch t.nodeType {
-	case ROOT:
-		{
-			nodetype := FATHER
-			if t.childs[0].childs[0].nodeType == DATA {
-				nodetype = LEAF
-			}
-			centerPoi := Threshold / 2
-			node1 := NewNode(t.childs[centerPoi].key, t.childs[centerPoi].key)
-			node1.nodeType = nodetype
-			node1.childs = make([]*Node, centerPoi+1)
-			copy(node1.childs, t.childs[:centerPoi+1])
-			node2 := NewNode(t.childs[Threshold-1].key, t.childs[Threshold-1].key)
-			node2.nodeType = nodetype
-			node2.childs = make([]*Node, Threshold-centerPoi-1)
-			copy(node1.childs, t.childs[centerPoi+1:])
-			t.childs = t.childs[:0]
-			t.childs = append(t.childs, node1)
-			t.childs = append(t.childs, node2)
-		}
-	default:
-		centerPoi := Threshold / 2
-		centerNode := t.childs[centerPoi]
-		newLeafNode := NewNode(centerNode.key, centerNode.value)
-		newLeafNode.nodeType = t.nodeType
-		newLeafNode.childs = make([]*Node, centerPoi+1)
-		copy(newLeafNode.childs, t.childs[:centerPoi+1])
-		t.childs = t.childs[centerPoi+1:]
-		fatherNode := t.father
-		poi := 0
-		for i, cn := range fatherNode.childs {
-			if strings.Compare(newLeafNode.key, cn.key) <= 0 {
-				poi = i
-				break
-			}
-		}
-		fatherNode.childs = append(fatherNode.childs, newLeafNode)
-		copy(fatherNode.childs[poi+1:], fatherNode.childs[poi:])
-		fatherNode.childs[poi] = newLeafNode
-		if len(fatherNode.childs) == Threshold {
-			fatherNode.nodeSplit()
+			leftNode := NewFatherNode(n.Key)
+			leftNode.LeftNode = n.LeftNode
+			cn := n.LeftNode
+			changeFather(cn, leftNode, center-1)
+			leftNode.ChildCount = center - 1
+			leftNode.Father = n
+			n.LeftNode = leftNode
+			leftNode.Next = newFatherNode
+			newFatherNode.Pre = leftNode
+			newFatherNode.Father = n
+			n.ChildCount = 2
 		}
 	}
 }
-
-//SearchData search  data from tree
-func (t *Node) SearchData(data string) *Node {
-	switch t.nodeType {
-	case LEAF:
-		{
-			for _, cn := range t.childs {
-				if strings.Compare(data, cn.key) <= 0 {
-					return cn
-				}
-			}
-			return nil
-		}
-	default:
-		{
-			childsLen := len(t.childs)
-			for i, cn := range t.childs {
-				if strings.Compare(data, cn.key) < 0 {
-					return nil
-				}
-				if i == childsLen-1 || strings.Compare(data, t.childs[i+1].key) < 0 {
-					return cn.SearchData(data)
-				}
-			}
-			return nil
-		}
+func initFatherNode(node *Node) *Node {
+	return &Node{
+		Key:      node.Key,
+		NodeType: FATHER,
+		LeftNode: node,
 	}
-
 }
 
-//GetValue get node value
-func (t *Node) GetValue() string {
-	return t.value
-}
+//SearchKey get key node
+func (n *Node) SearchKey(key uint32) *Node {
+	if key < n.Key {
+		return nil
+	} else if key == n.Key {
+		if n.NodeType == LEFT {
+			return n
+		}
+		return n.LeftNode.SearchKey(key)
+	} else {
+		nowNode := n.LeftNode
+		for i := 1; i < n.ChildCount; i++ {
+			nowNode = nowNode.Next
+			if key == nowNode.Key {
+				if nowNode.NodeType == LEFT {
+					return nowNode
+				}
+				return nowNode.SearchKey(key)
 
-//GetNext get next node point
-func (t *Node) GetNext() *Node {
-	return t.next
+			} else if key < nowNode.Key {
+				return nowNode.Pre.SearchKey(key)
+			} else if key > nowNode.Key && nowNode.Next == nil && nowNode.NodeType == FATHER {
+				return nowNode.SearchKey(key)
+			}
+		}
+		return nil
+	}
+}
+func changeFather(fristNode *Node, fahterNode *Node, nodeCount int) {
+	for i := 0; i < nodeCount; i++ {
+		fristNode.Father = fahterNode
+		fristNode = fristNode.Next
+	}
 }
