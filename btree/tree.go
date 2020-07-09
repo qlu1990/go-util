@@ -1,6 +1,9 @@
 package btree
 
-import "errors"
+import (
+	"encoding/binary"
+	"errors"
+)
 
 var (
 	//Threshold threshold for one node childs count
@@ -20,6 +23,8 @@ var (
 
 //Node root node
 type Node struct {
+	blockID    uint32
+	cBlockID   uint32
 	Key        uint32
 	Value      string
 	ChildCount int
@@ -247,6 +252,33 @@ func (n *Node) SearchKey(key uint32) *Node {
 		}
 		return nil
 	}
+}
+func loadNodes([]byte) (count int, n *Node) {
+	return 0, &Node{}
+}
+func dumpNode(fristNode *Node, nodeCount int, data []byte) int {
+	n := fristNode
+	index := 0
+	for i := 0; i < nodeCount; i++ {
+		index = index + writeUint32(n.Key, data)           // 写入key值
+		index = index + writeString(n.Value, data[index:]) //写入value值
+		index = index + writeUint32(n.cBlockID, data[index:])
+		n = n.Next
+	}
+	return index
+}
+func writeString(value string, data []byte) int {
+	strData := []byte(value)
+	count := len(strData)
+	binary.BigEndian.PutUint16(data, uint16(count))
+	copy(data[2:], strData)
+	return 2 + count
+
+}
+func writeUint32(key uint32, data []byte) int {
+	binary.BigEndian.PutUint16(data, uint16(4))
+	binary.BigEndian.PutUint32(data[2:], key)
+	return 6
 }
 func changeFather(fristNode *Node, fahterNode *Node, nodeCount int) {
 	for i := 0; i < nodeCount; i++ {
